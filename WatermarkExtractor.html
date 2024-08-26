@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head><title>Watermark Extractor - Release That Watermark!</title></head>
+<body style="padding:0px;margin:0px;">
+
+<div style="background-color:#FFFFFF;position:absolute;width:240px;">
+<div>Input image 1:</div>
+<div><input type="file" id="Image1Input"></div>
+<div><span>Background image 1: </span><input type="color" id="Image1ColourPicker" value="#000000"></div>
+<div>Input image 2:</div>
+<div><input type="file" id="Image2Input"></div>
+<div><span>Background image 2: </span><input type="color" id="Image2ColourPicker" value="#FFFFFF"></div>
+<div>Calibration tile dimensions:</div>
+<div><span>Width: </span><input type="number" id="CalibrationTileWidth" value="1"></div>
+<div><span>Height:</span><input type="number" id="CalibrationTileHeight" value="1"></div>
+<div><button id="ApplyCalibrationTileSizeButton">Apply calibration tile size</button></div>
+<div>Relative image position:</div>
+<div><span>X: </span><input type="number" id="X1Field" value="0" step="0.1"></div>
+<div><span>Y: </span><input type="number" id="Y1Field" value="0" step="0.1"></div>
+<div><button id="ApplyRelativePositionButton">Apply relative position</button></div>
+<div>Relative position movement step in pixels:</div>
+<div><input type="radio" name="RelativeMovementStep" id="RelativeMovementStep0.1" value="0.1"><label for="RelativeMovementStep0.1">0.1</label>
+<input type="radio" name="RelativeMovementStep" id="RelativeMovementStep1" value="1" checked><label for="RelativeMovementStep1">1</label>
+<input type="radio" name="RelativeMovementStep" id="RelativeMovementStep10" value="10"><label for="RelativeMovementStep10">10</label>
+<input type="radio" name="RelativeMovementStep" id="RelativeMovementStep100" value="100"><label for="RelativeMovementStep100">100</label></div>
+<div>Position presets:</div>
+<div><button id="TopLeftPositionPresetButton">Same top-left corner</button></div>
+<div><button id="TopRightPositionPresetButton">Same top-right corner</button></div>
+<div><button id="BottomLeftPositionPresetButton">Same bottom-left corner</button></div>
+<div><button id="BottomRightPositionPresetButton">Same bottom-right corner</button></div>
+<div><span>Zoom scale:</span><input type="number" id="ZoomScaleField" value="1"></div>
+<div><button id="ApplyZoomButton">Apply zoom</button></div>
+<div><button id="ExtractWatermarkButton">EXTRACT WATERMARK!</button></div>
+</div>
+
+<div id="CanvassesContainer" style="position:absolute;left:240px;width:800px;height:600px;overflow:auto;cursor:move;border:solid;background-color:#7F7F7F;">
+<canvas id="InputImageCanvas1" width="800" height="600" style="width:100%;height:100%;position:absolute;top:0px;z-index:1;image-rendering:crisp-edges;"></canvas>
+<canvas id="InputImageCanvas2" width="800" height="600" style="width:100%;height:100%;position:absolute;top:0px;z-index:0;image-rendering:crisp-edges;"></canvas>
+</div>
+
+<canvas id="ExtractionCanvas" width="800" height="600" style="dislay:none;"></canvas>
+<a id="ExportLink" style="dislay:none;"></a>
+<script>
+//Input image 1 ("II1") related variables
+var II1Input=document.getElementById("Image1Input");var II1File;var II1Bitmap;var II1Width;var II1Height;var II1Area;var MinRII1;var MaxRII1;var MinGII1;var MaxGII1;var MinBII1;var MaxBII1;var RangeRII1;var RangeGII1;var RangeBII1;
+var II1ColourPicker=document.getElementById("Image1ColourPicker");var BackgroundII1R;var BackgroundII1G;var BackgroundII1B;
+var II1Canvas=document.getElementById("InputImageCanvas1");var II1CanvasContext=II1Canvas.getContext("2d");var II1ImageData;
+//Input image 1 ("II2") related variables
+var II2Input=document.getElementById("Image2Input");var II2File;var II2Bitmap;var II2Width;var II2Height;var II2Area;var MinRII2;var MaxRII2;var MinGII2;var MaxGII2;var MinBII2;var MaxBII2;var RangeRII2;var RangeGII2;var RangeBII2;
+var II2ColourPicker=document.getElementById("Image2ColourPicker");var BackgroundII2R;var BackgroundII2G;var BackgroundII2B;
+var II2Canvas=document.getElementById("InputImageCanvas2");var II2CanvasContext=II2Canvas.getContext("2d");var II2ImageData;
+//Calibration tiling variables
+var ApplyCalibrationTileSizeButton=document.getElementById("ApplyCalibrationTileSizeButton");
+var CalibrationTileWidthField=document.getElementById("CalibrationTileWidth");var CalibrationTileWidth;
+var CalibrationTileHeightField=document.getElementById("CalibrationTileHeight");var CalibrationTileHeight;
+//Position system related variables
+var CanvassesContainer=document.getElementById("CanvassesContainer");
+var X1Field=document.getElementById("X1Field");var X1=0;
+var Y1Field=document.getElementById("Y1Field");var Y1=0;
+var XOffset=0;var SavedXOffset;var YOffset=0;var SavedYOffset;
+var ApplyRelativePositionButton=document.getElementById("ApplyRelativePositionButton");
+var Key;
+var RelativeMovementStep0_1Button=document.getElementById("RelativeMovementStep0.1");
+var RelativeMovementStep1Button=document.getElementById("RelativeMovementStep1");
+var RelativeMovementStep10Button=document.getElementById("RelativeMovementStep10");
+var RelativeMovementStep100Button=document.getElementById("RelativeMovementStep100");
+var RelativeMovementStep=1;
+var TopLeftPositionPresetButton=document.getElementById("TopLeftPositionPresetButton");
+var TopRightPositionPresetButton=document.getElementById("TopRightPositionPresetButton");
+var BottomLeftPositionPresetButton=document.getElementById("BottomLeftPositionPresetButton");
+var BottomRightPositionPresetButton=document.getElementById("BottomRightPositionPresetButton");
+var SavedCursorX;var SavedCursorY;
+//Zoom related variables
+var ZoomScaleField=document.getElementById("ZoomScaleField");
+var ZoomScale=1;
+var ApplyZoomButton=document.getElementById("ApplyZoomButton");
+//Watermark extraction related variables
+var ExtractWatermarkButton=document.getElementById("ExtractWatermarkButton");
+var ExtractionCanvas=document.getElementById("ExtractionCanvas");
+var ExtractionCanvasContext=ExtractionCanvas.getContext("2d");
+var ExtractionII1ImageData;var ExtractionII2ImageData;var ExtractionCanvasImageData;
+var ColourString;
+var ExtractionMinX1;var ExtractionMaxX1;var ExtractionMinY1;var ExtractionMaxY1;
+var ExtractionMinX2;var ExtractionMaxX2;var ExtractionMinY2;var ExtractionMaxY2;
+var ExtractionWidth;var ExtractionHeight;var ExtractionArea;
+var II1R;var II1G;var II1B;var II2R;var II2G;var II2B;
+var BackgroundColourDistance;var ColourDistance;var A;
+var ExportLink=document.getElementById("ExportLink");
+//Miscellaneous variables
+var LoopCounter1;var LoopCounter2;var ArrayIndex;var R;var G;var B;
+
+II1Input.onchange=InitialiseCalibrationCanvas1;
+async function InitialiseCalibrationCanvas1(){
+console.log("==== Initialising calibration canvas 1 ====");
+console.log("  Loading input file in ImageBitmap");
+II1File=II1Input.files[0];II1Bitmap=await createImageBitmap(II1File);II1Width=II1Bitmap.width;II1Height=II1Bitmap.height;II1Area=II1Width*II1Height;console.log("  Width="+II1Width+"\n  Height="+II1Height);
+console.log("  Retrieving ImageData object through canvas");
+II1Canvas.width=II1Width;II1Canvas.height=II1Height;II1Canvas.style.width=ZoomScale*II1Width+"px";II1Canvas.style.height=ZoomScale*II1Height+"px";
+II1CanvasContext.drawImage(II1Bitmap,0,0);II1ImageData=II1CanvasContext.getImageData(0,0,II1Width,II1Height);
+console.log("  Calculation of extrema of the RGB colour components");
+MinRII1=255;MaxRII1=0;MinGII1=255;MaxGII1=0;MinBII1=255;MaxBII1=0;
+ArrayIndex=0;for(LoopCounter1=0;LoopCounter1<II1Area;LoopCounter1=LoopCounter1+1){
+R=II1ImageData.data[ArrayIndex];G=II1ImageData.data[ArrayIndex+1];B=II1ImageData.data[ArrayIndex+2];ArrayIndex=ArrayIndex+4;
+if(R<MinRII1){MinRII1=R;}if(R>MaxRII1){MaxRII1=R;}if(G<MinGII1){MinGII1=G;}if(G>MaxGII1){MaxGII1=G;}if(B<MinBII1){MinBII1=B;}if(B>MaxBII1){MaxBII1=B;}}RangeRII1=MaxRII1-MinRII1;RangeGII1=MaxGII1-MinGII1;RangeBII1=MaxBII1-MinBII1;
+console.log("  Image 1:\nMinR="+MinRII1+", MaxR="+MaxRII1+", RangeR="+RangeRII1+"\nMinG="+MinGII1+", MaxG="+MaxGII1+", RangeG="+RangeGII1+"\nMinB="+MinBII1+", MaxB="+MaxBII1+", RangeB="+RangeBII1);
+console.log("  Contrast enhancement (Theory: http://www.iaeng.org/IJCS/issues_v34/issue_2/IJCS_34_2_12.pdf )");
+ArrayIndex=0;for(LoopCounter1=0;LoopCounter1<II1Area;LoopCounter1=LoopCounter1+1){
+if(MaxRII1>MinRII1){II1ImageData.data[ArrayIndex]=(II1ImageData.data[ArrayIndex]-MinRII1)*255/(RangeRII1);}else{II1ImageData.data[ArrayIndex]=MaxRII1;}
+if(MaxGII1>MinGII1){II1ImageData.data[ArrayIndex+1]=(II1ImageData.data[ArrayIndex+1]-MinGII1)*255/(RangeGII1);}else{II1ImageData.data[ArrayIndex+1]=MaxGII1;}
+if(MaxBII1>MinBII1){II1ImageData.data[ArrayIndex+2]=(II1ImageData.data[ArrayIndex+2]-MinBII1)*255/(RangeBII1);}else{II1ImageData.data[ArrayIndex+2]=MaxBII1;}
+ArrayIndex=ArrayIndex+4;}
+console.log("  Applying calibration transparency pattern");
+CalibrationTileWidth=CalibrationTileWidthField.value;CalibrationTileHeight=CalibrationTileHeightField.value;console.log("Calibration tile width: "+CalibrationTileWidth+", calibration tile height: "+CalibrationTileHeight);
+ArrayIndex=0;for(LoopCounter2=0;LoopCounter2<II1Height;LoopCounter2=LoopCounter2+1){for(LoopCounter1=0;LoopCounter1<II1Width;LoopCounter1=LoopCounter1+1){
+if((Math.trunc(LoopCounter1/CalibrationTileWidth)%2==0&Math.trunc(LoopCounter2/CalibrationTileHeight)%2==0)||(Math.trunc(LoopCounter1/CalibrationTileWidth)%2==1&Math.trunc(LoopCounter2/CalibrationTileHeight)%2==1)){
+II1ImageData.data[ArrayIndex+3]=0;}else{II1ImageData.data[ArrayIndex+3]=255;}ArrayIndex=ArrayIndex+4;}}
+console.log("  Drawing the contrast-enhanced image in canvas");
+II1CanvasContext.putImageData(II1ImageData,0,0);MoveCanvasses();
+console.log("==== Canvas 1 initialised ====\n");}
+
+II2Input.onchange=InitialiseCalibrationCanvas2;
+async function InitialiseCalibrationCanvas2(){
+console.log("==== Initialising calibration canvas 2 ====");
+console.log("  Loading input file in ImageBitmap");
+II2File=II2Input.files[0];II2Bitmap=await createImageBitmap(II2File);II2Width=II2Bitmap.width;II2Height=II2Bitmap.height;II2Area=II2Width*II2Height;console.log("  Width="+II2Width+"\n  Height="+II2Height);
+console.log("  Retrieving ImageData object through canvas");
+II2Canvas.width=II2Width;II2Canvas.height=II2Height;II2Canvas.style.width=ZoomScale*II2Width+"px";II2Canvas.style.height=ZoomScale*II2Height+"px";
+II2CanvasContext.drawImage(II2Bitmap,0,0);II2ImageData=II2CanvasContext.getImageData(0,0,II2Width,II2Height);
+console.log("  Calculation of extrema of the RGB colour components");
+MinRII2=255;MaxRII2=0;MinGII2=255;MaxGII2=0;MinBII2=255;MaxBII2=0;
+ArrayIndex=0;for(LoopCounter1=0;LoopCounter1<II2Area;LoopCounter1=LoopCounter1+1){
+R=II2ImageData.data[ArrayIndex];G=II2ImageData.data[ArrayIndex+1];B=II2ImageData.data[ArrayIndex+2];ArrayIndex=ArrayIndex+4;
+if(R<MinRII2){MinRII2=R;}if(R>MaxRII2){MaxRII2=R;}if(G<MinGII2){MinGII2=G;}if(G>MaxGII2){MaxGII2=G;}if(B<MinBII2){MinBII2=B;}if(B>MaxBII2){MaxBII2=B;}}RangeRII2=MaxRII2-MinRII2;RangeGII2=MaxGII2-MinGII2;RangeBII2=MaxBII2-MinBII2;
+console.log("  Image 2:\nMinR="+MinRII2+", MaxR="+MaxRII2+", RangeR="+RangeRII2+"\nMinG="+MinGII2+", MaxG="+MaxGII2+", RangeG="+RangeGII2+"\nMinB="+MinBII2+", MaxB="+MaxBII2+", RangeB="+RangeBII2);
+console.log("  Contrast enhancement (Theory: http://www.iaeng.org/IJCS/issues_v34/issue_2/IJCS_34_2_12.pdf )");
+ArrayIndex=0;for(LoopCounter1=0;LoopCounter1<II2Area;LoopCounter1=LoopCounter1+1){
+if(MaxRII2>MinRII2){II2ImageData.data[ArrayIndex]=(II2ImageData.data[ArrayIndex]-MinRII2)*255/(RangeRII2);}else{II2ImageData.data[ArrayIndex]=MaxRII2;}
+if(MaxGII2>MinGII2){II2ImageData.data[ArrayIndex+1]=(II2ImageData.data[ArrayIndex+1]-MinGII2)*255/(RangeGII2);}else{II2ImageData.data[ArrayIndex+1]=MaxGII2;}
+if(MaxBII2>MinBII2){II2ImageData.data[ArrayIndex+2]=(II2ImageData.data[ArrayIndex+2]-MinBII2)*255/(RangeBII2);}else{II2ImageData.data[ArrayIndex+2]=MaxBII2;}
+ArrayIndex=ArrayIndex+4;}
+console.log("  Drawing the contrast-enhanced image in canvas");
+II2CanvasContext.putImageData(II2ImageData,0,0);MoveCanvasses();
+console.log("==== Canvas 2 initialised ====\n");}
+
+ApplyCalibrationTileSizeButton.onclick=ApplyCalibrationTileSize;function ApplyCalibrationTileSize(){InitialiseCalibrationCanvas1();InitialiseCalibrationCanvas2();}
+
+ApplyRelativePositionButton.onclick=ApplyRelativePosition;function ApplyRelativePosition(){X1=parseFloat(X1Field.value);Y1=parseFloat(Y1Field.value);MoveCanvasses();}
+
+function MoveCanvasses(){
+II1Canvas.style.left=ZoomScale*(XOffset+X1).toString()+"px";II1Canvas.style.top=ZoomScale*(YOffset+Y1).toString()+"px";
+II2Canvas.style.left=ZoomScale*(XOffset).toString()+"px";II2Canvas.style.top=ZoomScale*(YOffset).toString()+"px";}
+
+document.addEventListener("keydown",KeyboardMovement);
+function KeyboardMovement(KeyDownEvent){Key=KeyDownEvent.key;
+if(RelativeMovementStep0_1Button.checked){RelativeMovementStep=0.1;}
+if(RelativeMovementStep1Button.checked){RelativeMovementStep=1;}
+if(RelativeMovementStep10Button.checked){RelativeMovementStep=10;}
+if(RelativeMovementStep100Button.checked){RelativeMovementStep=100;}
+if(Key=="ArrowLeft"){KeyDownEvent.preventDefault();X1Field.value=X1-RelativeMovementStep;ApplyRelativePosition();}
+if(Key=="ArrowRight"){KeyDownEvent.preventDefault();X1Field.value=X1+RelativeMovementStep;ApplyRelativePosition();}
+if(Key=="ArrowUp"){KeyDownEvent.preventDefault();Y1Field.value=Y1-RelativeMovementStep;ApplyRelativePosition();}
+if(Key=="ArrowDown"){KeyDownEvent.preventDefault();Y1Field.value=Y1+RelativeMovementStep;ApplyRelativePosition();}}
+
+CanvassesContainer.addEventListener("mousedown",InitialiseDraggingOfCanvasses);
+function InitialiseDraggingOfCanvasses(MouseDownEvent){
+SavedCursorX=MouseDownEvent.clientX;SavedCursorY=MouseDownEvent.clientY;SavedXOffset=XOffset;SavedYOffset=YOffset;
+CanvassesContainer.addEventListener("mousemove",DragCanvas);window.addEventListener("mouseup",StopDraggingCanvasses);}
+
+function DragCanvas(MouseMoveEvent){XOffset=SavedXOffset+MouseMoveEvent.clientX-SavedCursorX;YOffset=SavedYOffset+MouseMoveEvent.clientY-SavedCursorY;MoveCanvasses();}
+
+function StopDraggingCanvasses(){CanvassesContainer.removeEventListener("mousemove",DragCanvas);}
+
+TopLeftPositionPresetButton.onclick=MoveToTopLeft;
+TopRightPositionPresetButton.onclick=MoveToTopRight;
+BottomLeftPositionPresetButton.onclick=MoveToBottomLeft;
+BottomRightPositionPresetButton.onclick=MoveToBottomRight;
+function MoveToTopLeft(){XOffset=0;YOffset=0;X1Field.value=0;Y1Field.value=0;ApplyRelativePosition();}
+function MoveToTopRight(){XOffset=0;YOffset=0;X1Field.value=II2Width-II1Width;Y1Field.value=0;ApplyRelativePosition();}
+function MoveToBottomLeft(){XOffset=0;YOffset=0;X1Field.value=0;Y1Field.value=II2Height-II1Height;ApplyRelativePosition();}
+function MoveToBottomRight(){XOffset=0;YOffset=0;X1Field.value=II2Width-II1Width;Y1Field.value=II2Height-II1Height;ApplyRelativePosition();}
+
+ApplyZoomButton.onclick=ApplyZoom;function ApplyZoom(){ZoomScale=ZoomScaleField.value;InitialiseCalibrationCanvas1();InitialiseCalibrationCanvas2();}
+
+ExtractWatermarkButton.onclick=ExtractWatermark;
+function ExtractWatermark(){
+console.log("==== Initialising watermark extraction ====");
+console.log("  Reading input background colour parameters");
+ColourString=II1ColourPicker.value;BackgroundII1R=parseInt(ColourString[1]+ColourString[2],16);BackgroundII1G=parseInt(ColourString[3]+ColourString[4],16);BackgroundII1B=parseInt(ColourString[5]+ColourString[6],16);
+ColourString=II2ColourPicker.value;BackgroundII2R=parseInt(ColourString[1]+ColourString[2],16);BackgroundII2G=parseInt(ColourString[3]+ColourString[4],16);BackgroundII2B=parseInt(ColourString[5]+ColourString[6],16);
+console.log("  Input colour 1: "+BackgroundII1R+" "+BackgroundII1G+" "+BackgroundII1B);console.log("  Input colour 2: "+BackgroundII2R+" "+BackgroundII2G+" "+BackgroundII2B);
+BackgroundColourDistance=Math.abs(BackgroundII2R-BackgroundII1R)+Math.abs(BackgroundII2G-BackgroundII1G)+Math.abs(BackgroundII2B-BackgroundII1B);
+console.log("  Background colour distance: "+BackgroundColourDistance);
+console.log("  Calculating extraction window");
+if(X1>=0){ExtractionMinX1=0;ExtractionMinX2=X1;}else{ExtractionMinX1=-X1;ExtractionMinX2=0;}
+if(Y1>=0){ExtractionMinY1=0;ExtractionMinY2=Y1;}else{ExtractionMinY1=-Y1;ExtractionMinY2=0;}
+if(X1+II1Width>=II2Width){ExtractionMaxX1=II2Width-X1;ExtractionMaxX2=II2Width;}else{ExtractionMaxX1=II1Width;ExtractionMaxX2=X1+II1Width;}
+if(Y1+II1Height>=II2Height){ExtractionMaxY1=II2Height-Y1;ExtractionMaxY2=II2Height;}else{ExtractionMaxY1=II1Height;ExtractionMaxY2=Y1+II1Height;}
+console.log("  MinX1: "+ExtractionMinX1+" MaxX1: "+ExtractionMaxX1+" MinY1: "+ExtractionMinY1+" MaxY1: "+ExtractionMaxY1);
+console.log("  MinX2: "+ExtractionMinX2+" MaxX2: "+ExtractionMaxX2+" MinY2: "+ExtractionMinY2+" MaxY2: "+ExtractionMaxY2);
+ExtractionWidth=Math.abs(ExtractionMaxX2-ExtractionMinX2);ExtractionHeight=Math.abs(ExtractionMaxY2-ExtractionMinY2);
+console.log("  Extraction width: "+ExtractionWidth+" ExtractionHeight: "+ExtractionHeight);
+ExtractionCanvas.width=ExtractionWidth;ExtractionCanvas.height=ExtractionHeight;ExtractionArea=ExtractionWidth*ExtractionHeight;
+console.log("  Retrieving window on input Image 1 through canvas");
+ExtractionCanvasContext.drawImage(II1Bitmap,ExtractionMinX1,ExtractionMinY1,ExtractionWidth,ExtractionHeight,0,0,ExtractionWidth,ExtractionHeight);
+ExtractionII1ImageData=ExtractionCanvasContext.getImageData(0,0,ExtractionWidth,ExtractionHeight);
+console.log("  Retrieving window on input Image 2 through canvas");
+ExtractionCanvasContext.drawImage(II2Bitmap,ExtractionMinX2,ExtractionMinY2,ExtractionWidth,ExtractionHeight,0,0,ExtractionWidth,ExtractionHeight);
+ExtractionII2ImageData=ExtractionCanvasContext.getImageData(0,0,ExtractionWidth,ExtractionHeight);
+console.log("  Calculation of extracted watermark");
+ExtractionCanvasImageData=ExtractionII2ImageData;
+ArrayIndex=0;for(LoopCounter1=0;LoopCounter1<ExtractionArea;LoopCounter1=LoopCounter1+1){
+II1R=ExtractionII1ImageData.data[ArrayIndex];II1G=ExtractionII1ImageData.data[ArrayIndex+1];II1B=ExtractionII1ImageData.data[ArrayIndex+2];
+II2R=ExtractionII2ImageData.data[ArrayIndex];II2G=ExtractionII2ImageData.data[ArrayIndex+1];II2B=ExtractionII2ImageData.data[ArrayIndex+2];
+ColourDistance=(Math.abs(II2R-II1R)+Math.abs(II2G-II1G)+Math.abs(II2B-II1B));A=1-(ColourDistance/BackgroundColourDistance);
+ExtractionCanvasImageData.data[ArrayIndex]=((II1R+II2R)+(A-1)*(BackgroundII1R+BackgroundII2R))/(2*A);
+ExtractionCanvasImageData.data[ArrayIndex+1]=((II1G+II2G)+(A-1)*(BackgroundII1G+BackgroundII2G))/(2*A);
+ExtractionCanvasImageData.data[ArrayIndex+2]=((II1B+II2B)+(A-1)*(BackgroundII1B+BackgroundII2B))/(2*A);
+ExtractionCanvasImageData.data[ArrayIndex+3]=255*A;ArrayIndex=ArrayIndex+4;}
+ExtractionCanvasContext.putImageData(ExtractionCanvasImageData,0,0);
+console.log("  Export of extracted watermark");
+ExportLink.download="ExtractedWatermark";ExportLink.href=ExtractionCanvas.toDataURL();ExportLink.click();
+console.log("==== Watermark extracted ====\n");}
+</script>
+</body>
+</html>
